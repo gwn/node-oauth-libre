@@ -1,0 +1,8 @@
+title: Node-oauth-libre
+description: OAuth wrapper for node.js, oauth-libre
+google_analytics: 
+show_downloads: true
+theme: jekyll-theme-time-machine
+
+gems:
+  - jekyll-mentions
