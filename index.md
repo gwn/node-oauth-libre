@@ -1,9 +1,18 @@
 # node-oauth
+
+[![Build Status](https://travis-ci.org/omouse/node-oauth-libre.svg)](https://travis-ci.org/omouse/node-oauth-libre)
+[![License](http://img.shields.io/:license-gpl3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0.html)
+[![Flattr This](http://button.flattr.com/flattr-badge-large.png)](https://flattr.com/submit/auto?fid=y0jx3j&url=https%3A%2F%2Fgithub.com%2Fomouse%2Fnode-oauth-libre)
+
 A simple oauth API for node.js .  This API allows users to authenticate against OAUTH providers, and thus act as OAuth consumers. It also has support for OAuth Echo, which is used for communicating with 3rd party media providers such as TwitPic and yFrog.
 
 Tested against Twitter (http://twitter.com), term.ie (http://term.ie/oauth/example/), TwitPic, and Yahoo!
 
 Also provides rudimentary OAuth2 support, tested against facebook, github, foursquare, google and Janrain.   For more complete usage examples please take a look at connect-auth (http://github.com/ciaranj/connect-auth)
+
+## Related Libraries
+
+- [passport-oauth2-libre](https://github.com/caco0516/passport-oauth2-libre) Passport OAuth2 Strategy using node-oauth-libre.
 
 ## License and Copyright
 
@@ -21,6 +30,12 @@ the GPLv3 bits if they want to use them in a proprietary project
 
     npm install oauth-libre
 
+# Build the Docs
+
+Requires JSDoc to be installed:
+
+    npm run build-docs
+
 # Examples
 
 ## Using Promises
@@ -31,7 +46,7 @@ Install the bluebird promises library:
 
     npm install bluebird
 
-An example of using oauth-libre with Promises:
+An example of using oauth-libre with OAuth2 and Promises to access the Github API:
 
 ```
 var OAuth2 = require('oauth-libre').PromiseOAuth2;
@@ -74,9 +89,11 @@ Note that in the first line you must explicitly import OAuth2 with promises.
 
 ## OAuth1.0
 
+Example of using OAuth 1.0 with the Twitter API.
+
 ```javascript
 describe('OAuth1.0',function(){
-  var OAuth = require('oauth');
+  var OAuth = require('oauth-libre');
 
   it('tests trends Twitter API v1.1',function(done){
     var oauth = new OAuth.OAuth(
@@ -88,6 +105,7 @@ describe('OAuth1.0',function(){
       null,
       'HMAC-SHA1'
     );
+    oauth.setDefaultContentType('application/json');
     oauth.get(
       'https://api.twitter.com/1.1/trends/place.json?id=23424977',
       'your user token for this app', //test user token
@@ -106,7 +124,7 @@ describe('OAuth1.0',function(){
 ### Usage
 
 ```javascript
-var OAuth2 = require('oauth').OAuth2;
+var OAuth2 = require('oauth-libre').OAuth2;
 
 console.log("Login here to get an authorization code: " + oauth2.getAuthorizeUrl());
 
@@ -135,11 +153,43 @@ oauth2.getOAuthAccessToken(
 );
 ```
 
+### Hooks
+OAuth 2.0 implements hooks for every request before and after it is executed. We're using the [EventEmitter](https://nodejs.org/api/events.html) Node.js class to implement this.
+
+#### request:before
+This event is emitted before the HTTP (or HTTPS) request is executed. At this point we can modify the information in the request, such as the headers and POST data. Also we are given a `done` function because this event blocks request execution and we need to specify when to resume the current process.
+
+Let's see an example:
+
+```javascript
+  oa2.on('request:before', (options, postBody, done) => {
+    // here you can add anything you want to the request before execution
+    // can add new headers or add new data to body.
+    //
+    // NOTE: you must call done and send 3 parameters without exception.
+    // The 3rd parameter must to be true if you want to execute request
+    // immediately.
+    done(options, postBody, true);
+  });
+```
+
+You must call `done(modifiedOptions, modifiedPostBody, shouldExecute)` always. The `shouldExecute` parameter exists because if we have more listeners for the `request:before` event we want to make sure all of the listeners are able to receive the event. The request should execute only once, that's why we have this parameter to tell event that we want to execute the request immediately.
+
+### request:after
+This event is emitted after the request has been executed, we receive information about status and body of the response.
+
+```javascript
+  oa2.on('request:after', (status, response) => {
+    console.log('Status :' + JSON.stringify(status));
+    console.log('Response : ' + JSON.stringify(response));
+  });
+```
+
 ### Test
 
 ```javascript
 describe('OAuth2',function() {
-  var OAuth = require('oauth');
+  var OAuth = require('oauth-libre');
 
    it('gets bearer token', function(done){
      var OAuth2 = OAuth.OAuth2;
@@ -166,6 +216,7 @@ describe('OAuth2',function() {
 Included with the source code are examples of using a web-based interface to login with:
 
 * Github: `examples/github-example.js`
+* Github OAuth 2.0 and Hooks: `examples/github-oauth2-authentication.js`
 * Twitter: `examples/twitter-example.js`
 
 The Google example was removed due to the need for a custom Google-specific OAuth2 library for authentication.
@@ -182,6 +233,28 @@ The Google example was removed due to the need for a custom Google-specific OAut
 1. Click the link that says "Get Code"
 1. Login to Github and authorize the application
 1. You will be returned to `http://localhost:8080/code` and should see the access token, on the command-line you will see something like "Obtained access_token: ..."
+
+
+### Example: Authentication with Github OAuth 2.0 and Hooks
+
+1. Create a Github account
+1. Create a new Developer Application (Settings > OAuth applications > Developer Applications)
+1. Fill in the Authorization callback URL with `http://localhost:3000/github/callback`
+1. Complete this with your information:
+```javascript
+  const clientId = 'YOURCLIENTID';
+  const clientSecret = 'YOURCLIENTSECRET';
+  const scope = 'user';
+  const redirectUrl = 'http://localhost:' + port + '/github/callback';
+  const baseUrl = 'https://github.com';
+  const authorizeUrl = '/login/oauth/authorize';
+  const tokenUrl = '/login/oauth/access_token';
+```
+1. Run the web server: `node examples/github-oauth2-authentication.js`
+1. Open the website: `http://localhost:3000/`
+1. Click the link that says "Sign In with Github"
+1. Login to Github and authorize the application
+1. You will be returned to `http://localhost:8080/github/callback` and that's it.
 
 ### Example: Authentication with Google
 
@@ -200,11 +273,18 @@ The Google example was removed due to the need for a custom Google-specific OAut
 1. You will be returned to `http://localhost:8080/code` and should see some results from the response on the command-line
 
 # Change History
+* 0.9.17
+    - OAuth1: Allow setting of default Content-Type for requests, either through constructor's `customHeaders` parameter or through `setDefaultContentType` method
+* 0.9.16
+    - OAuth2 hooks for before and after a request is executed
 * 0.9.15
     - Promises for OAuth1 and OAuth2 with multiArgs
     - PATCH support for OAuth1 and OAuth2
     - GPLv3+ licensing
     - Code examples updated, tested and working
+    - OAuth2: Authorization header added for POST token
+    - OAuth1: Able to set HTTPS/HTTP options
+    - OAuth1: getOAuthAccessToken now accepts an additional extraParams argument
 * 0.9.14
     - OAuth2:   Extend 'successful' token responses to include anything in the 2xx range.
 * 0.9.13
@@ -290,6 +370,7 @@ The Google example was removed due to the need for a custom Google-specific OAut
 * Andreas Knecht
 * Andrew Martins - http://www.andrewmartens.com
 * Brian Park - http://github.com/yaru22
+* Carlos Castillo Oporta - https://github.com/caco0516
 * Christian Schwarz  - http://github.com/chrischw/
 * Ciaran Jessup - ciaranj@gmail.com
 * Damien Mathieu - http://42.dmathieu.com
@@ -297,6 +378,7 @@ The Google example was removed due to the need for a custom Google-specific OAut
 * Derek Brooks
 * Evan Prodromou
 * Garrick Cheung - http://www.garrickcheung.com/
+* George Haddad - https://github.com/george-haddad
 * Jeffrey D. Van Alstine
 * Joe Rozer - http://www.deadbytes.net
 * Jose Ignacio Andres
@@ -308,9 +390,11 @@ The Google example was removed due to the need for a custom Google-specific OAut
 * Patrick Negri - http://github.com/pnegri
 * Pieter Joost van de Sande - https://github.com/pjvds
 * Raoul Millais
-* Rudolf Olah - http://neverfriday.com
+* Rudolf Olah - https://neverfriday.com
+* Ryan Ausanka-Crues - http://quanticmind.com/
 * Ryan LeFevre - http://meltingice.net
 * Tang Bo Hao - http://github.com/btspoony
 * Ted Goddard
 * bendiy - https://github.com/bendiy
 * rolandboon - http://rolandboon.com
+* cr24osome - https://github.com/cr24osome
