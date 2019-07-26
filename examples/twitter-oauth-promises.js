@@ -51,7 +51,10 @@ var url = "https://api.twitter.com/1.1/statuses/home_timeline.json";
 var accessToken = "your access token";
 var accessTokenSecret = "your access token secret";
 
-client.get(url, accessToken, accessTokenSecret).then(function(data, response) {
+client.get(url, accessToken, accessTokenSecret).then(function(result) {
+  var data = result[0]
+  var response = result[1]
+
   console.log("Data: " + data);
   console.log("Response: " + response);
 }).catch(function(error) {
